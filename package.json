@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
-    "browserslist": "^4.28.2",
-    "caniuse-lite": "^1.0.30001792",
     "date-fns": "^4.1.0",
     "idb-keyval": "^6.2.2",
     "jszip": "^3.10.1",
@@ -28,6 +26,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "browserslist": "^4.28.2",
+    "caniuse-lite": "^1.0.30001792",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

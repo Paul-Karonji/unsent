@@ -4,6 +4,10 @@
 
 **Unsent** is a beautifully designed, secure, and fully offline-capable personal diary Progressive Web App (PWA). Built for intimacy, calmness, and privacy, this application acts as a private night journal.
 
+🌐 **Live App**: [https://unsent-eosin.vercel.app](https://unsent-eosin.vercel.app)
+
+---
+
 ## 🎨 Design Philosophy: "Soft Midnight"
 
 The UI is meticulously crafted around the **Soft Midnight** design scheme.
@@ -15,6 +19,8 @@ The UI is meticulously crafted around the **Soft Midnight** design scheme.
   - **Cards**: Muted Slate (`#2D3748`), Warm Gray (`#3A3A40`)
   - **Accents**: Dusty Rose (`#D8A7B1`), Soft Lavender (`#B8A4D9`)
   - **Typography**: Warm Beige (`#E8D8C3`), Main Text (`#F8F4F0`), Muted (`#B9B4AE`)
+
+---
 
 ## ✨ Core Features
 
@@ -36,10 +42,15 @@ You have complete ownership of your data. Generate a downloadable `.zip` file of
 ### 🎙️ Talk-to-Type (Voice Dictation)
 Sometimes it is easier to speak your thoughts. Unsent natively integrates the Web Speech API, allowing you to seamlessly dictate your diary entries in real-time. Simply click the microphone icon and speak out loud.
 
+### 🔑 Change Password
+You can change your account password at any time from the Settings panel. When updated, the app automatically re-hashes and stores the new password locally so that offline unlock continues to work seamlessly with your new credentials.
+
 ### ⚡ Offline First & Background Sync
-You don't need internet to use your diary. 
+You don't need internet to use your diary.
 - **Read & Write Offline**: Using `IndexedDB` caching, you can open the app, search, and write entries while in airplane mode or entirely offline.
 - **Silent Sync**: As soon as your device reconnects to the internet, Unsent silently uploads any pending diary entries to the secure database in the background. *(Note: File attachments currently require an active internet connection).*
+
+---
 
 ## 🔒 Security, Local Lock, & Multi-Tenancy
 
@@ -57,6 +68,8 @@ To maintain absolute privacy while supporting offline capabilities, Unsent uses 
 ### Customizable Auto-Lock
 Never worry about leaving your diary open accidentally. Unsent features an idle timer that automatically locks the app after a customizable period of inactivity (e.g., 5 minutes, 15 minutes), returning it to the secure password prompt.
 
+---
+
 ## 🛠 Tech Stack
 
 - **Frontend**: React + Vite + VitePWA
@@ -66,6 +79,8 @@ Never worry about leaving your diary open accidentally. Unsent features an idle 
 - **Styling**: Vanilla CSS (Strict adherence to the Soft Midnight design tokens)
 - **Backend & Auth**: Supabase (PostgreSQL + GoTrue Auth + Supabase Storage)
 - **Typography**: Playfair Display (Titles), Inter (Body), Literata/Georgia (Writing Interface)
+
+---
 
 ## 🚀 Getting Started
 
@@ -81,7 +96,7 @@ npm install
 ```
 
 ### 3. Environment Variables
-Create a `.env.local` file in the root directory and add your Supabase credentials. You will need your Postgres Connection String and your Anon Public Key:
+Create a `.env.local` file in the root directory and add your Supabase credentials:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
@@ -103,9 +118,13 @@ npm run dev
 Navigate to `http://localhost:5173/` in your browser.
 
 ### 6. Deployment
-This app is 100% deployment-ready for platforms like Vercel, Netlify, or Render. 
+This app is 100% deployment-ready for platforms like Vercel, Netlify, or Render.
 - Ensure your `.env.local` remains securely on your machine (it is automatically ignored by Git).
-- In your hosting provider's dashboard, manually add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as Environment Variables. 
+- In your hosting provider's dashboard, manually add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as Environment Variables.
 - You do *not* need to include `DATABASE_URL` in production, as it is only used locally for the initial database setup.
 
-#   u n s e n t  
+#### Supabase Auth URL Configuration (Required for Deployed Apps)
+After deploying, you **must** update your Supabase project settings so that email confirmation links point to your live app instead of localhost:
+1. Go to your [Supabase Dashboard](https://supabase.com/dashboard) → **Authentication** → **URL Configuration**.
+2. Set the **Site URL** to `https://unsent-eosin.vercel.app`.
+3. Add `https://unsent-eosin.vercel.app` to the **Additional Redirect URLs** list.

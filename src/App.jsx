@@ -38,6 +38,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [autoLockMinutes, setAutoLockMinutes] = useState(5);
   const [isExporting, setIsExporting] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
@@ -220,7 +223,13 @@ function App() {
         const res = await supabase.auth.signInWithPassword({ email, password });
         error = res.error;
       } else {
-        const res = await supabase.auth.signUp({ email, password });
+        const res = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: 'https://unsent-eosin.vercel.app/'
+          }
+        });
         error = res.error;
         if (!error) {
           setAuthError('Check your email for the confirmation link!');
@@ -248,6 +257,26 @@ function App() {
     await set(LOCAL_HASH_KEY, null);
     setSession(null);
     setIsUnlocked(false);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (isOffline) {
+      setPasswordMessage('Cannot change password while offline.');
+      return;
+    }
+    setIsChangingPassword(true);
+    setPasswordMessage('');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setPasswordMessage(error.message);
+    } else {
+      const hash = await hashPassword(newPassword);
+      await set(LOCAL_HASH_KEY, hash);
+      setPasswordMessage('Password updated successfully!');
+      setNewPassword('');
+    }
+    setIsChangingPassword(false);
   };
 
   const handleExport = async () => {
@@ -549,6 +578,26 @@ function App() {
                  {isExporting ? 'Exporting...' : 'Download Backup (.zip)'}
                </button>
                {isOffline && <p style={{ fontSize: '0.8rem', color: 'var(--accent-dusty-rose)', marginTop: '8px' }}>You are offline. Media attachments cannot be downloaded.</p>}
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+               <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px' }}>Change Password</label>
+               <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                 <input 
+                   type="password" 
+                   placeholder="New password" 
+                   value={newPassword}
+                   onChange={(e) => setNewPassword(e.target.value)}
+                   style={{ padding: '12px', background: 'var(--bg-deep-navy)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '12px', fontSize: '1rem' }}
+                   required 
+                   disabled={isOffline || isChangingPassword}
+                 />
+                 <button type="submit" className="btn-secondary" style={{ width: '100%' }} disabled={isOffline || isChangingPassword || !newPassword}>
+                   {isChangingPassword ? 'Updating...' : 'Update Password'}
+                 </button>
+               </form>
+               {passwordMessage && <p style={{ fontSize: '0.8rem', color: passwordMessage.includes('success') ? 'var(--accent-soft-lavender)' : 'var(--accent-dusty-rose)', marginTop: '8px' }}>{passwordMessage}</p>}
+               {isOffline && <p style={{ fontSize: '0.8rem', color: 'var(--accent-dusty-rose)', marginTop: '8px' }}>You are offline. Password cannot be changed.</p>}
             </div>
           </div>
         </div>
