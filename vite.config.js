@@ -8,12 +8,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Unsent',
+        name: 'Unsent — Private Diary App',
         short_name: 'Unsent',
-        description: 'A private night journal.',
+        description: 'A private, secure diary for your most honest thoughts. Write freely with offline support, voice-to-text, photo attachments, and password protection.',
         theme_color: '#111827',
         background_color: '#111827',
         display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        lang: 'en',
+        categories: ['lifestyle', 'productivity'],
         icons: [
           {
             src: 'android-chrome-192x192.png',
@@ -36,3 +40,4 @@ export default defineConfig({
     })
   ]
 })
+

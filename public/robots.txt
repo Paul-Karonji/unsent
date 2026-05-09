@@ -1,0 +1,6 @@
+# https://unsent-eosin.vercel.app/robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://unsent-eosin.vercel.app/sitemap.xml
