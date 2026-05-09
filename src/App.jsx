@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { get, set } from 'idb-keyval';
 import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY } from './db';
-import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff } from 'lucide-react';
+import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download } from 'lucide-react';
 import AttachmentUploader from './components/AttachmentUploader';
 import CalendarView from './components/CalendarView';
 import SearchPage from './components/SearchPage';
@@ -466,20 +466,30 @@ function App() {
               <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px', lineHeight: '1.6', fontSize: '0.95rem' }}>
                 Unsent is a personal diary app built for privacy. No ads, no tracking — just a safe place to write freely.
               </p>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {[
-                  { icon: '🔒', title: 'Password protected', desc: 'Your entries are locked behind your password and auto-lock when you step away.' },
-                  { icon: '📵', title: 'Offline-first', desc: 'Write anywhere — the app works fully offline and syncs when you reconnect.' },
-                  { icon: '🎙️', title: 'Voice-to-text dictation', desc: 'Speak your thoughts aloud and have them transcribed directly into your diary.' },
-                  { icon: '📎', title: 'Photo & file attachments', desc: 'Attach images, videos, and files to capture the full memory.' },
-                  { icon: '📅', title: 'Calendar view', desc: 'Browse your past entries by date and revisit memories on this day.' },
-                  { icon: '💾', title: 'Export your diary', desc: 'Download all your entries and attachments as a ZIP backup anytime.' },
-                ].map(({ icon, title, desc }) => (
-                  <li key={title} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '1.4rem', flexShrink: 0, marginTop: '2px' }}>{icon}</span>
+                  { Icon: Lock, title: 'Password protected', desc: 'Your entries are locked behind your password and auto-lock when you step away.' },
+                  { Icon: WifiOff, title: 'Offline-first', desc: 'Write anywhere — the app works fully offline and syncs when you reconnect.' },
+                  { Icon: Mic, title: 'Voice-to-text dictation', desc: 'Speak your thoughts aloud and have them transcribed directly into your diary.' },
+                  { Icon: ImageIcon, title: 'Photo & file attachments', desc: 'Attach images, videos, and files to capture the full memory.' },
+                  { Icon: Calendar, title: 'Calendar view', desc: 'Browse your past entries by date and revisit memories on this day.' },
+                  { Icon: Download, title: 'Export your diary', desc: 'Download all your entries and attachments as a ZIP backup anytime.' },
+                ].map(({ Icon, title, desc }) => (
+                  <li key={title} style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                    <div style={{ 
+                      padding: '10px', 
+                      background: 'var(--card-warm-gray)', 
+                      borderRadius: '12px', 
+                      color: 'var(--accent-soft-lavender)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Icon size={20} />
+                    </div>
                     <div>
-                      <strong style={{ color: 'var(--text-main)', fontSize: '0.95rem' }}>{title}</strong>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: '2px 0 0', lineHeight: '1.5' }}>{desc}</p>
+                      <strong style={{ color: 'var(--text-main)', fontSize: '1rem', fontWeight: '500' }}>{title}</strong>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '4px 0 0', lineHeight: '1.6' }}>{desc}</p>
                     </div>
                   </li>
                 ))}
