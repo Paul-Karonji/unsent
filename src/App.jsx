@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { get, set } from 'idb-keyval';
 import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY } from './db';
-import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings } from 'lucide-react';
+import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff } from 'lucide-react';
 import AttachmentUploader from './components/AttachmentUploader';
 import CalendarView from './components/CalendarView';
 import SearchPage from './components/SearchPage';
@@ -41,6 +41,9 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [emailJustConfirmed, setEmailJustConfirmed] = useState(false);
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
@@ -129,8 +132,18 @@ function App() {
       setIsUnlocked(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      // When the user clicks their confirmation email, Supabase fires SIGNED_IN.
+      // Auto-open the unlock panel so they know to enter their password.
+      if (event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED' || event === 'USER_UPDATED') {
+        if (session) {
+          setShowAuth(true);
+          if (event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED') {
+            setEmailJustConfirmed(true);
+          }
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -451,6 +464,11 @@ function App() {
               {isOffline ? 'Unlock Journal' : (session ? 'Unlock Journal' : (isLogin ? 'Log In' : 'Sign Up'))}
             </h2>
             {isOffline && <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '16px', fontSize: '0.9rem' }}>App is offline. Using local lock.</p>}
+            {emailJustConfirmed && (
+              <p style={{ color: 'var(--accent-soft-lavender)', textAlign: 'center', marginBottom: '16px', fontSize: '0.9rem', background: 'rgba(200,180,240,0.08)', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(200,180,240,0.2)' }}>
+                ✓ Email confirmed! Enter your password to unlock your diary.
+              </p>
+            )}
             {authError && <p style={{ color: 'var(--accent-dusty-rose)', textAlign: 'center', marginBottom: '16px' }}>{authError}</p>}
             <form onSubmit={handleUnlock} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {(!isOffline && !session) && (
@@ -463,14 +481,25 @@ function App() {
                   required={!isOffline}
                 />
               )}
-              <input 
-                type="password" 
-                placeholder="Your password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{ padding: '12px', borderBottom: '1px solid var(--accent-soft-lavender)', fontSize: '1rem' }}
-                required 
-              />
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Your password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ width: '100%', padding: '12px', paddingRight: '44px', borderBottom: '1px solid var(--accent-soft-lavender)', fontSize: '1rem', boxSizing: 'border-box' }}
+                  required 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center' }}
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               <button type="submit" className="btn-primary" style={{ marginTop: '16px' }}>
                 {isOffline ? 'Unlock' : (session ? 'Unlock' : (isLogin ? 'Log In' : 'Sign Up'))}
               </button>
@@ -583,15 +612,26 @@ function App() {
             <div style={{ marginBottom: '24px' }}>
                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px' }}>Change Password</label>
                <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                 <input 
-                   type="password" 
-                   placeholder="New password" 
-                   value={newPassword}
-                   onChange={(e) => setNewPassword(e.target.value)}
-                   style={{ padding: '12px', background: 'var(--bg-deep-navy)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '12px', fontSize: '1rem' }}
-                   required 
-                   disabled={isOffline || isChangingPassword}
-                 />
+                 <div style={{ position: 'relative' }}>
+                   <input 
+                     type={showNewPassword ? 'text' : 'password'}
+                     placeholder="New password" 
+                     value={newPassword}
+                     onChange={(e) => setNewPassword(e.target.value)}
+                     style={{ width: '100%', padding: '12px', paddingRight: '44px', background: 'var(--bg-deep-navy)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '12px', fontSize: '1rem', boxSizing: 'border-box' }}
+                     required 
+                     disabled={isOffline || isChangingPassword}
+                   />
+                   <button
+                     type="button"
+                     onClick={() => setShowNewPassword(v => !v)}
+                     style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center' }}
+                     tabIndex={-1}
+                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                   >
+                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                   </button>
+                 </div>
                  <button type="submit" className="btn-secondary" style={{ width: '100%' }} disabled={isOffline || isChangingPassword || !newPassword}>
                    {isChangingPassword ? 'Updating...' : 'Update Password'}
                  </button>
