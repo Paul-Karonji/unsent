@@ -209,9 +209,8 @@ function App() {
     } else {
       // Online Unlock Mode
       let error;
-      if (isLogin && session) {
-        // If they already have a session but are locked, they just need to verify password
-        // The safest offline-first way is to just verify against local hash even when online if they just locked it
+      if (isLogin && session && !emailJustConfirmed) {
+        // If they already have a session and are just locked, verify against local hash
         const storedHash = await get(LOCAL_HASH_KEY);
         if (storedHash) {
           const inputHash = await hashPassword(password);
@@ -226,10 +225,11 @@ function App() {
         }
       }
 
-      // If no session or no hash, do full Supabase auth
+      // If no session, no local hash, or just confirmed email → do full Supabase auth
       if (isLogin) {
         const res = await supabase.auth.signInWithPassword({ email, password });
         error = res.error;
+        if (!error) setEmailJustConfirmed(false); // clear confirmation banner on success
       } else {
         const res = await supabase.auth.signUp({ 
           email, 
@@ -461,7 +461,7 @@ function App() {
               ✕
             </button>
             <h2 style={{ textAlign: 'center', marginBottom: '24px' }}>
-              {isOffline ? 'Unlock Journal' : (session ? 'Unlock Journal' : (isLogin ? 'Log In' : 'Sign Up'))}
+              {isOffline ? 'Unlock Journal' : (emailJustConfirmed ? 'Log In' : (session ? 'Unlock Journal' : (isLogin ? 'Log In' : 'Sign Up')))}
             </h2>
             {isOffline && <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '16px', fontSize: '0.9rem' }}>App is offline. Using local lock.</p>}
             {emailJustConfirmed && (
@@ -471,7 +471,7 @@ function App() {
             )}
             {authError && <p style={{ color: 'var(--accent-dusty-rose)', textAlign: 'center', marginBottom: '16px' }}>{authError}</p>}
             <form onSubmit={handleUnlock} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {(!isOffline && !session) && (
+              {(!isOffline && (!session || emailJustConfirmed)) && (
                 <input 
                   type="email" 
                   placeholder="Your email address" 
@@ -501,10 +501,10 @@ function App() {
                 </button>
               </div>
               <button type="submit" className="btn-primary" style={{ marginTop: '16px' }}>
-                {isOffline ? 'Unlock' : (session ? 'Unlock' : (isLogin ? 'Log In' : 'Sign Up'))}
+                {isOffline ? 'Unlock' : (emailJustConfirmed ? 'Log In' : (session ? 'Unlock' : (isLogin ? 'Log In' : 'Sign Up')))}
               </button>
               
-              {(!isOffline && !session) && (
+              {(!isOffline && (!session || emailJustConfirmed)) && (
                 <p style={{ textAlign: 'center', color: 'var(--text-muted)', cursor: 'pointer', marginTop: '16px' }} onClick={() => setIsLogin(!isLogin)}>
                   {isLogin ? "Don't have a diary? Start here." : "Already have a diary? Log in."}
                 </p>
