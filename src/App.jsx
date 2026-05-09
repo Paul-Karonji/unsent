@@ -44,6 +44,29 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [emailJustConfirmed, setEmailJustConfirmed] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
@@ -444,9 +467,16 @@ function App() {
             <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', maxWidth: '400px', lineHeight: '1.6', fontFamily: 'var(--font-writing)', marginBottom: '32px' }}>
               A private, offline-capable space for what you need to let out.
             </p>
-            <button className="btn-secondary" style={{ padding: '12px 32px', fontSize: '1.1rem' }} onClick={() => setShowAuth(true)}>
-              {isOffline ? 'Unlock' : (session ? 'Unlock' : 'Log In')}
-            </button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+              <button className="btn-secondary" style={{ padding: '12px 32px', fontSize: '1.1rem' }} onClick={() => setShowAuth(true)}>
+                {isOffline ? 'Unlock' : (session ? 'Unlock' : 'Log In')}
+              </button>
+              {deferredPrompt && (
+                <button className="btn-primary" style={{ padding: '12px 32px', fontSize: '1.1rem', background: 'var(--accent-soft-lavender)', color: 'var(--bg-deep-navy)' }} onClick={handleInstallClick}>
+                  Install App
+                </button>
+              )}
+            </div>
 
             {/* ── SEO: Semantic feature content (crawlable by Google) ── */}
             <section
@@ -657,6 +687,19 @@ function App() {
                  {isExporting ? 'Exporting...' : 'Download Backup (.zip)'}
                </button>
                {isOffline && <p style={{ fontSize: '0.8rem', color: 'var(--accent-dusty-rose)', marginTop: '8px' }}>You are offline. Media attachments cannot be downloaded.</p>}
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+               <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px' }}>App Installation</label>
+               {deferredPrompt ? (
+                 <button className="btn-primary" style={{ width: '100%', background: 'var(--accent-soft-lavender)', color: 'var(--bg-deep-navy)' }} onClick={handleInstallClick}>
+                   Install Unsent App
+                 </button>
+               ) : (
+                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', margin: 0 }}>
+                   App is already installed or your browser doesn't support installation here.
+                 </p>
+               )}
             </div>
 
             <div style={{ marginBottom: '24px' }}>
