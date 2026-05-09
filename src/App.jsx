@@ -134,15 +134,10 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      // When the user clicks their confirmation email, Supabase fires SIGNED_IN.
-      // Auto-open the unlock panel so they know to enter their password.
-      if (event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED' || event === 'USER_UPDATED') {
-        if (session) {
-          setShowAuth(true);
-          if (event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED') {
-            setEmailJustConfirmed(true);
-          }
-        }
+      // When the user clicks the confirmation email link, Supabase fires SIGNED_IN.
+      // Stay on the home page but show a confirmation banner.
+      if ((event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED') && session) {
+        setEmailJustConfirmed(true);
       }
     });
 
@@ -423,6 +418,11 @@ function App() {
         {/* Landing Page Content */}
         {!showAuth && (
           <div style={{ textAlign: 'center', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {emailJustConfirmed && (
+              <div style={{ marginBottom: '24px', padding: '12px 20px', borderRadius: '14px', background: 'rgba(200,180,240,0.10)', border: '1px solid rgba(200,180,240,0.25)', color: 'var(--accent-soft-lavender)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.1rem' }}>✓</span> Email confirmed! You can now log in.
+              </div>
+            )}
             <img 
               src="/android-chrome-512x512.png" 
               alt="Unsent Icon" 
