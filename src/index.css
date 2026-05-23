@@ -30,7 +30,57 @@
   --radius-pill: 999px;
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.15);
   --transition-slow: all 0.4s ease;
+
+  /* Premium Responsive Spacing & Layout Tokens */
+  --border: rgba(255, 255, 255, 0.08);
+  --container-padding: 24px;
+  --spacing-xl: 48px;
+  --spacing-lg: 32px;
+  --spacing-md: 24px;
+  --spacing-sm: 16px;
+  --spacing-xs: 8px;
+  
+  --font-size-h1: 2.5rem;
+  --font-size-h2: 1.75rem;
+  --font-size-body: 1rem;
 }
+
+@media (max-width: 768px) {
+  :root {
+    --container-padding: 20px;
+    --spacing-xl: 36px;
+    --spacing-lg: 24px;
+    --spacing-md: 16px;
+    --spacing-sm: 12px;
+    --font-size-h1: 2.1rem;
+    --font-size-h2: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --container-padding: 16px;
+    --spacing-xl: 28px;
+    --spacing-lg: 20px;
+    --spacing-md: 14px;
+    --spacing-sm: 8px;
+    --radius-card: 16px;
+    --font-size-h1: 1.75rem;
+    --font-size-h2: 1.35rem;
+  }
+}
+
+@media (max-width: 360px) {
+  :root {
+    --container-padding: 12px;
+    --spacing-xl: 20px;
+    --spacing-lg: 16px;
+    --radius-card: 12px;
+    --font-size-h1: 1.5rem;
+    --font-size-h2: 1.2rem;
+  }
+}
+
 
 * {
   box-sizing: border-box;
@@ -693,4 +743,272 @@ textarea::placeholder, input::placeholder {
   background: var(--highlight-warm-beige);
   transform: scale(1.08);
 }
+
+/* ==========================================================================
+   PREMIUM RESPONSIVE LAYOUTS & REFINEMENTS
+   ========================================================================== */
+
+/* Main Responsive Container Class */
+.app-container {
+  padding: var(--container-padding);
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.app-container-fullheight {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* App Header Refinements */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.app-header h1 {
+  font-size: var(--font-size-h2);
+  white-space: nowrap;
+}
+
+/* Landing Page Responsive Styles */
+.landing-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--container-padding);
+  width: 100%;
+}
+
+.landing-title {
+  font-size: var(--font-size-h1);
+  margin-bottom: 12px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap; /* Safe wrap on ultra-narrow screens */
+  text-align: center;
+}
+
+.landing-title .locked-badge {
+  font-size: 0.85rem;
+  background: var(--card-warm-gray);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: normal;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Adaptive Header Buttons (Circular on mobile, full on desktop) */
+.header-btn {
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+/* Main Action Button Resizing */
+.btn-new-entry {
+  padding: 16px 36px !important;
+  font-size: 1.15rem !important;
+  box-shadow: 0 10px 25px rgba(216, 167, 171, 0.2);
+}
+
+.btn-new-entry:hover {
+  box-shadow: 0 12px 30px rgba(232, 216, 195, 0.3);
+}
+
+/* Lightbox overlay adaptive padding */
+.lightbox-overlay {
+  padding: var(--container-padding);
+}
+
+/* Calendar Grid Spacing Refinement */
+.calendar-grid {
+  gap: 4px;
+}
+
+.calendar-day {
+  font-size: 0.9rem;
+}
+
+/* Responsive Breakpoints & Overrides */
+@media (max-width: 600px) {
+  /* Hide text in header buttons to prevent squeezed UI */
+  .app-header .btn-text {
+    display: none;
+  }
+  
+  .header-btn {
+    padding: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 480px) {
+  /* Make primary/secondary buttons slightly more compact */
+  .btn-primary {
+    padding: 12px 24px;
+    font-size: 0.95rem;
+  }
+  
+  .btn-secondary {
+    padding: 10px 20px;
+    font-size: 0.9rem;
+  }
+
+  .btn-new-entry {
+    padding: 12px 28px !important;
+    font-size: 1rem !important;
+  }
+
+  /* Nav Bar elements scaling to fit smaller viewports */
+  .nav-bar {
+    gap: 8px;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: 12px;
+  }
+
+  .nav-item {
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    gap: 6px;
+  }
+  
+  .calendar-day-header {
+    font-size: 0.75rem;
+  }
+
+  .calendar-day {
+    font-size: 0.85rem;
+  }
+  
+  .calendar-header h2 {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 380px) {
+  /* Tailored for devices like Infinix S4, iPhone SE, etc. */
+  .nav-bar {
+    gap: 4px;
+  }
+
+  .nav-item {
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    gap: 4px;
+  }
+  
+  .calendar-day-header {
+    font-size: 0.7rem;
+  }
+
+  .calendar-day {
+    font-size: 0.8rem;
+  }
+  
+  .writing-area {
+    font-size: 1.05rem;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 320px) {
+  /* Extreme small device viewport protection */
+  .nav-item {
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    gap: 2px;
+  }
+  
+  .nav-item svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Editor Page Refinements */
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.editor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* responsive overrides for editor header */
+@media (max-width: 480px) {
+  .editor-header {
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .editor-cancel-btn {
+    padding: 8px 16px !important;
+    font-size: 0.9rem !important;
+    min-height: auto !important;
+  }
+  
+  .editor-save-btn {
+    padding: 8px 16px !important;
+    font-size: 0.9rem !important;
+    min-height: auto !important;
+  }
+  
+  .editor-actions {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .editor-status-text {
+    display: none;
+  }
+  
+  .editor-actions {
+    gap: 6px;
+  }
+  
+  .editor-cancel-btn, .editor-save-btn {
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
+  }
+}
+
 

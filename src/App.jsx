@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { get, set } from 'idb-keyval';
-import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY } from './db';
-import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download } from 'lucide-react';
+import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY, PENDING_SYNC_KEY, CACHED_ENTRIES_KEY } from './db';
+import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download, LogOut } from 'lucide-react';
 import AttachmentUploader from './components/AttachmentUploader';
 import AttachmentViewer from './components/AttachmentViewer';
 import CalendarView from './components/CalendarView';
@@ -421,6 +421,49 @@ function App() {
     }
   };
 
+  const handleDeleteEntry = async (entry) => {
+    if (!window.confirm("Are you sure you want to delete this entry forever? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      if (isOffline) {
+        // Offline Deletion
+        const pending = await get(PENDING_SYNC_KEY) || [];
+        const filteredPending = pending.filter(e => e.id !== entry.id);
+        await set(PENDING_SYNC_KEY, filteredPending);
+
+        const cached = await get(CACHED_ENTRIES_KEY) || [];
+        const filteredCached = cached.filter(e => e.id !== entry.id);
+        await set(CACHED_ENTRIES_KEY, filteredCached);
+
+        setSelectedEntry(null);
+        loadEntries();
+      } else {
+        // Online Deletion
+        if (entry.entry_attachments && entry.entry_attachments.length > 0) {
+          const filePaths = entry.entry_attachments.map(att => att.storage_path);
+          await supabase.storage.from('attachments').remove(filePaths);
+          for (const path of filePaths) {
+            await set(`attachment_blob_${path}`, null);
+          }
+        }
+
+        const { error } = await supabase.from('entries').delete().eq('id', entry.id);
+        if (error) throw error;
+
+        const cached = await get(CACHED_ENTRIES_KEY) || [];
+        const filteredCached = cached.filter(e => e.id !== entry.id);
+        await set(CACHED_ENTRIES_KEY, filteredCached);
+
+        setSelectedEntry(null);
+        loadEntries();
+      }
+    } catch (err) {
+      alert("Failed to delete entry: " + err.message);
+    }
+  };
+
   const onThisDayEntries = useMemo(() => {
     if (!entries.length) return [];
     const today = new Date();
@@ -438,10 +481,10 @@ function App() {
 
   if (!session || !isUnlocked) {
     return (
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '24px' }}>
+      <div className="landing-container">
         {/* Landing Page Content */}
         {!showAuth && (
-          <div style={{ textAlign: 'center', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ textAlign: 'center', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
             {emailJustConfirmed && (
               <div style={{ marginBottom: '24px', padding: '12px 20px', borderRadius: '14px', background: 'rgba(200,180,240,0.10)', border: '1px solid rgba(200,180,240,0.25)', color: 'var(--accent-soft-lavender)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.1rem' }}>✓</span> Email confirmed! You can now log in.
@@ -459,9 +502,9 @@ function App() {
               onError={(e) => e.target.style.display='none'} 
             />
             <div style={{ color: 'var(--accent-soft-lavender)', fontSize: '1.2rem', opacity: 0.7, marginBottom: '20px' }}>✧</div>
-            <h1 style={{ fontSize: '2.5rem', marginBottom: '12px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
+            <h1 className="landing-title">
               Unsent
-              <span style={{ fontSize: '0.9rem', background: 'var(--card-warm-gray)', padding: '6px 12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontWeight: 'normal', border: '1px solid var(--border)' }}>
+              <span className="locked-badge">
                 <Lock size={14} /> Locked
               </span>
             </h1>
@@ -478,6 +521,7 @@ function App() {
                 </button>
               )}
             </div>
+
 
             {/* ── SEO: Semantic feature content (crawlable by Google) ── */}
             <section
@@ -599,12 +643,12 @@ function App() {
 
   if (isWriting) {
     return (
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-          <button className="btn-secondary" onClick={() => { setIsWriting(false); setDraftFiles([]); if(isListening) toggleListening(); }}>
+      <div className="app-container app-container-fullheight">
+        <div className="editor-header">
+          <button className="btn-secondary editor-cancel-btn" onClick={() => { setIsWriting(false); setDraftFiles([]); if(isListening) toggleListening(); }}>
             Cancel
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="editor-actions">
             <button 
               onClick={toggleListening}
               style={{
@@ -636,8 +680,13 @@ function App() {
                  </>
               ) : <MicOff size={20} />}
             </button>
-            {isOffline && <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Saving locally...</span>}
-            <button className="btn-primary" onClick={() => { saveEntry(); if(isListening) toggleListening(); }}>
+            {isOffline && (
+              <span className="editor-status" title="Saving locally (offline)">
+                <WifiOff size={16} />
+                <span className="editor-status-text">Saving locally...</span>
+              </span>
+            )}
+            <button className="btn-primary editor-save-btn" onClick={() => { saveEntry(); if(isListening) toggleListening(); }}>
               Save Entry
             </button>
           </div>
@@ -656,9 +705,9 @@ function App() {
 
 
   return (
-    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+    <div className="app-container">
       {showSettings && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
+        <div className="lightbox-overlay" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 1000 }}>
           <div className="card" style={{ maxWidth: '400px', width: '100%', position: 'relative' }}>
             <button className="btn-secondary" style={{ position: 'absolute', top: '16px', right: '16px', padding: '4px 8px', border: 'none' }} onClick={() => setShowSettings(false)}>✕</button>
             <h2 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={24}/> Settings</h2>
@@ -737,23 +786,38 @@ function App() {
         </div>
       )}
 
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <header className="app-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h1>Unsent</h1>
           {isOffline && <span style={{ background: 'var(--card-warm-gray)', color: 'var(--text-muted)', padding: '4px 12px', borderRadius: '16px', fontSize: '0.8rem' }}>Offline Mode</span>}
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn-secondary" style={{ padding: '8px', border: 'none' }} onClick={() => setShowSettings(true)} title="Settings"><Settings size={20}/></button>
-          <button className="btn-secondary" onClick={handleLock}>Lock</button>
-          {!isOffline && <button className="btn-secondary" style={{ border: 'none', color: 'var(--text-muted)' }} onClick={handleFullLogout}>Sign Out</button>}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn-secondary header-btn" style={{ padding: '8px', border: 'none' }} onClick={() => setShowSettings(true)} title="Settings">
+            <Settings size={20} />
+          </button>
+          <button className="btn-secondary header-btn" onClick={handleLock} title="Lock">
+            <Lock size={18} />
+            <span className="btn-text">Lock</span>
+          </button>
+          {!isOffline && (
+            <button className="btn-secondary header-btn" onClick={handleFullLogout} title="Sign Out">
+              <LogOut size={18} />
+              <span className="btn-text">Sign Out</span>
+            </button>
+          )}
         </div>
       </header>
 
       {selectedEntry && (
         <div style={{ marginBottom: '32px' }}>
-           <button className="btn-secondary" style={{ padding: '8px 16px', border: 'none', marginBottom: '16px' }} onClick={() => setSelectedEntry(null)}>
-              ← Back
-           </button>
+           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+             <button className="btn-secondary" style={{ padding: '8px 16px', border: 'none' }} onClick={() => setSelectedEntry(null)}>
+                ← Back
+             </button>
+             <button className="btn-secondary" style={{ padding: '8px 16px', border: 'none', color: 'var(--accent-dusty-rose)' }} onClick={() => handleDeleteEntry(selectedEntry)}>
+                Delete Entry
+             </button>
+           </div>
            <div className="card">
               <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
                 <span>{new Date(selectedEntry.created_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
@@ -795,8 +859,8 @@ function App() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '48px' }}>
-                <button className="btn-primary" style={{ padding: '20px 48px', fontSize: '1.25rem' }} onClick={() => setIsWriting(true)}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--spacing-xl)' }}>
+                <button className="btn-primary btn-new-entry" onClick={() => setIsWriting(true)}>
                   New Entry
                 </button>
               </div>

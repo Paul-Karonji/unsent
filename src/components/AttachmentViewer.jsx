@@ -37,20 +37,28 @@ function AttachmentItem({ att, isOffline, onClick }) {
           return;
         }
 
-        // 3. Download from Supabase private storage bucket
-        const { data, error: downloadError } = await supabase.storage
+        // 3. Create signed URL for progressive stream rendering
+        const { data: signedData, error: signedError } = await supabase.storage
           .from('attachments')
-          .download(att.storage_path);
+          .createSignedUrl(att.storage_path, 3600);
 
-        if (downloadError) throw downloadError;
+        if (signedError) throw signedError;
 
-        if (data && isMounted) {
-          // 4. Cache the Blob locally in IndexedDB for PWA offline capability
-          await set(cacheKey, data);
-          
-          objectUrl = URL.createObjectURL(data);
-          setSrc(objectUrl);
+        if (signedData && isMounted) {
+          setSrc(signedData.signedUrl);
         }
+
+        // 4. Background Cache the Blob locally in IndexedDB for PWA offline capability
+        // (Do not await this, so it runs concurrently in the background)
+        supabase.storage
+          .from('attachments')
+          .download(att.storage_path)
+          .then(({ data }) => {
+            if (data) {
+              set(cacheKey, data);
+            }
+          })
+          .catch(err => console.warn("Background caching failed:", err));
       } catch (err) {
         console.error('Error loading private attachment:', err);
         if (isMounted) {
