@@ -4,6 +4,7 @@ import { get, set } from 'idb-keyval';
 import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY } from './db';
 import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download } from 'lucide-react';
 import AttachmentUploader from './components/AttachmentUploader';
+import AttachmentViewer from './components/AttachmentViewer';
 import CalendarView from './components/CalendarView';
 import SearchPage from './components/SearchPage';
 import { useIdleTimer } from 'react-idle-timer';
@@ -760,30 +761,8 @@ function App() {
               </div>
               <p style={{ lineHeight: '1.6', whiteSpace: 'pre-wrap', fontSize: '1.1rem' }}>{selectedEntry.content}</p>
               
-              {selectedEntry.entry_attachments && selectedEntry.entry_attachments.length > 0 && (
-                <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>Attached memories</h4>
-                  <div className="attachment-previews">
-                    {selectedEntry.entry_attachments.map(att => {
-                      const publicUrl = supabase.storage.from('attachments').getPublicUrl(att.storage_path).data.publicUrl;
-                      // Wait, we used a private bucket. We should use createSignedUrl, but for simplicity let's assume we need to handle it.
-                      // Alternatively we can just not display the image immediately if we can't easily sign it here.
-                      // For now, let's just show a file card for everything.
-                      return (
-                        <div key={att.id} className="attachment-preview" style={{ background: 'var(--card-warm-gray)' }}>
-                          <div className="file-icon">
-                            {att.file_type?.startsWith('image/') ? <ImageIcon size={24} /> : att.file_type?.startsWith('video/') ? <Video size={24} /> : <File size={24} />}
-                            <span style={{ fontSize: '0.7rem', textAlign: 'center', wordBreak: 'break-all', padding: '4px' }}>
-                              {att.file_name}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-           </div>
+              <AttachmentViewer attachments={selectedEntry.entry_attachments} isOffline={isOffline} />
+            </div>
         </div>
       )}
 
