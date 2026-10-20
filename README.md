@@ -28,7 +28,7 @@ The UI is meticulously crafted around the **Soft Midnight** design scheme.
 Navigate your diary visually through a soft monthly calendar. Days with written entries are marked with a gentle dusty rose indicator, allowing you to easily look back on past feelings.
 
 ### 🔍 Memory Search
-Find specific memories, feelings, or words instantly. Search operates securely on your device, featuring auto-extracted "Mood" chips so you can filter your entries by how you felt that day.
+Find specific memories, feelings, or words instantly. Search operates securely on your device, featuring Mood tags you assign while writing so you can filter your entries by how you felt that day.
 
 ### 📎 Attached Memories
 Words aren't always enough. You can attach images, short videos, and files directly to your entries. Attachments are uploaded securely to your private Supabase storage bucket, displayed as soft preview cards below your writing.

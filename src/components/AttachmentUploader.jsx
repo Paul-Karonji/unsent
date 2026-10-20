@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
-import { Paperclip, X, File, Video, Image as ImageIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Paperclip, X, File } from 'lucide-react';
 
 export default function AttachmentUploader({ files, setFiles, isOffline }) {
   const fileInputRef = useRef(null);
@@ -41,14 +41,8 @@ export default function AttachmentUploader({ files, setFiles, isOffline }) {
     });
   };
 
-  useEffect(() => {
-    // Cleanup previews on unmount
-    return () => {
-      files.forEach(f => {
-        if (f.preview) URL.revokeObjectURL(f.preview);
-      });
-    };
-  }, []);
+  // Preview object URLs are owned by App's clearDrafts (save/cancel) so they
+  // survive a lock/unlock cycle; removeFile revokes on individual removal.
 
   return (
     <div className="attachment-uploader">

@@ -1,5 +1,21 @@
 import pkg from 'pg';
+import { readFileSync } from 'fs';
 const { Client } = pkg;
+
+// Fall back to .env.local so the script can be run directly: `node setup_db.js`
+if (!process.env.DATABASE_URL) {
+  try {
+    for (const line of readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
+      const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      if (match) {
+        const value = match[2].trim().replace(/^["']|["']$/g, '');
+        if (!process.env[match[1]]) process.env[match[1]] = value;
+      }
+    }
+  } catch {
+    // .env.local not present — the check below will report it
+  }
+}
 
 // Require the connection string from environment variables
 const connectionString = process.env.DATABASE_URL;
@@ -72,6 +88,29 @@ async function setupDatabase() {
     `);
     
     console.log('RLS policies created successfully.');
+
+    // Performance indexes — with RLS every query filters on user_id
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_entries_user_created ON entries (user_id, created_at DESC);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_entry ON entry_attachments (entry_id);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_user ON entry_attachments (user_id);`);
+    console.log('Performance indexes created successfully.');
+
+    // Keep updated_at fresh automatically
+    await client.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at() RETURNS trigger AS $$
+      BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await client.query(`DROP TRIGGER IF EXISTS trg_entries_updated_at ON entries;`);
+    await client.query(`
+      CREATE TRIGGER trg_entries_updated_at
+      BEFORE UPDATE ON entries
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    `);
+    console.log('updated_at trigger created successfully.');
 
     // Create attachments table
     await client.query(`

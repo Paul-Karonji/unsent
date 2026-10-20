@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
+import { clickableProps } from '../lib/a11y';
 
 export default function SearchPage({ entries, onSelectEntry }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,7 +55,7 @@ export default function SearchPage({ entries, onSelectEntry }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {filteredEntries.length > 0 ? (
           filteredEntries.map(entry => (
-            <div key={entry.id} className="card" onClick={() => onSelectEntry(entry)} style={{ cursor: 'pointer' }}>
+            <div key={entry.id} className="card" {...clickableProps(() => onSelectEntry(entry))} style={{ cursor: 'pointer' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
                 <span>{format(new Date(entry.created_at), 'MMMM d, yyyy')}</span>
                 {entry.mood && <span style={{ background: 'var(--accent-soft-lavender)', color: 'var(--bg-deep-navy)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{entry.mood}</span>}

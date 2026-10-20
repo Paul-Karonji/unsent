@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { get, set } from 'idb-keyval';
-import { supabase } from '../App';
-import { Image as ImageIcon, Video, File, Download, X, WifiOff } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { clickableProps } from '../lib/a11y';
+import { File, Download, X, WifiOff } from 'lucide-react';
 
 // Cache key prefix for attachment blobs
 const CACHE_PREFIX = 'attachment_blob_';
@@ -19,7 +20,7 @@ function AttachmentItem({ att, isOffline, onClick }) {
 
     const fetchAttachment = async () => {
       try {
-        // 1. Try reading from IndexedDB cache first
+        // 1. Serve from the local cache when we already have the file
         const cachedBlob = await get(cacheKey);
         if (cachedBlob && isMounted) {
           objectUrl = URL.createObjectURL(cachedBlob);
@@ -28,7 +29,7 @@ function AttachmentItem({ att, isOffline, onClick }) {
           return;
         }
 
-        // 2. If offline and not in cache, we cannot download it
+        // 2. Offline without a cached copy — cannot download it
         if (isOffline) {
           if (isMounted) {
             setOfflineUnavailable(true);
@@ -37,28 +38,19 @@ function AttachmentItem({ att, isOffline, onClick }) {
           return;
         }
 
-        // 3. Create signed URL for progressive stream rendering
-        const { data: signedData, error: signedError } = await supabase.storage
+        // 3. Download once, display via object URL, and cache for offline use.
+        // A single blob download keeps bandwidth low, never expires, and works
+        // with the `download` attribute in the lightbox.
+        const { data, error } = await supabase.storage
           .from('attachments')
-          .createSignedUrl(att.storage_path, 3600);
+          .download(att.storage_path);
+        if (error) throw error;
 
-        if (signedError) throw signedError;
-
-        if (signedData && isMounted) {
-          setSrc(signedData.signedUrl);
+        if (data && isMounted) {
+          objectUrl = URL.createObjectURL(data);
+          setSrc(objectUrl);
+          set(cacheKey, data).catch(err => console.warn('Attachment caching failed:', err));
         }
-
-        // 4. Background Cache the Blob locally in IndexedDB for PWA offline capability
-        // (Do not await this, so it runs concurrently in the background)
-        supabase.storage
-          .from('attachments')
-          .download(att.storage_path)
-          .then(({ data }) => {
-            if (data) {
-              set(cacheKey, data);
-            }
-          })
-          .catch(err => console.warn("Background caching failed:", err));
       } catch (err) {
         console.error('Error loading private attachment:', err);
         if (isMounted) {
@@ -127,9 +119,9 @@ function AttachmentItem({ att, isOffline, onClick }) {
   const isVideo = att.file_type?.startsWith('video/');
 
   return (
-    <div 
-      className="attachment-preview loaded" 
-      onClick={handleCardClick} 
+    <div
+      className="attachment-preview loaded"
+      {...(src ? clickableProps(handleCardClick) : {})}
       style={{ cursor: src ? 'pointer' : 'default' }}
     >
       {isImage && src ? (

@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { get, set } from 'idb-keyval';
-import { hashPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, LOCAL_HASH_KEY, PENDING_SYNC_KEY, CACHED_ENTRIES_KEY } from './db';
-import { Calendar, Search, Book, Image as ImageIcon, File, Video, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download, LogOut } from 'lucide-react';
+import { get, set, del, keys } from 'idb-keyval';
+import { hashPassword, verifyPassword, getLocalEntries, cacheEntriesLocally, saveEntryOffline, syncPendingEntries, syncPendingDeletions, LOCAL_HASH_KEY, PENDING_SYNC_KEY, CACHED_ENTRIES_KEY, PENDING_DELETIONS_KEY, USER_ID_KEY } from './db';
+import { supabase } from './lib/supabase';
+import { clickableProps } from './lib/a11y';
+import { Calendar, Search, Book, Image as ImageIcon, Mic, MicOff, Lock, Settings, Eye, EyeOff, WifiOff, Download, LogOut } from 'lucide-react';
 import AttachmentUploader from './components/AttachmentUploader';
 import AttachmentViewer from './components/AttachmentViewer';
 import CalendarView from './components/CalendarView';
 import SearchPage from './components/SearchPage';
 import { useIdleTimer } from 'react-idle-timer';
-import JSZip from 'jszip';
 import './index.css';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const MOODS = ['Reflective', 'Grateful', 'Hopeful', 'Anxious', 'Sad', 'Angry', 'Joyful', 'Lonely'];
+const ATTACHMENT_CACHE_PREFIX = 'attachment_blob_';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -46,6 +44,11 @@ function App() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [emailJustConfirmed, setEmailJustConfirmed] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [draftMood, setDraftMood] = useState('Reflective');
+
+  // Set right before we trigger a sign-in ourselves, so the auth listener can
+  // tell our own logins apart from an email-confirmation link landing.
+  const initiatedLoginRef = useRef(false);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
@@ -130,43 +133,9 @@ function App() {
     });
   }, []);
 
-  useEffect(() => {
-    const handleOnline = async () => {
-      setIsOffline(false);
-      if (isUnlocked) {
-        const synced = await syncPendingEntries();
-        if (synced) fetchEntriesOnline();
-      }
-    };
-    const handleOffline = () => setIsOffline(true);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [isUnlocked]);
-
-  // Auth initialization
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setIsUnlocked(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      // When the user clicks the confirmation email link, Supabase fires SIGNED_IN.
-      // Stay on the home page but show a confirmation banner.
-      if ((event === 'SIGNED_IN' || event === 'EMAIL_CONFIRMED') && session) {
-        setEmailJustConfirmed(true);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const handleLock = () => {
+    setIsUnlocked(false);
+  };
 
   const handleOnIdle = () => {
     if (isUnlocked && autoLockMinutes > 0) {
@@ -181,35 +150,113 @@ function App() {
     disabled: !isUnlocked || autoLockMinutes === 0
   });
 
-  // Load entries when unlocked
-  useEffect(() => {
-    if (session && isUnlocked) {
-      loadEntries();
-    }
-  }, [session, isUnlocked, isOffline]);
+  const fetchEntriesOnline = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('entries')
+      .select(`*, entry_attachments(*)`)
+      .order('created_at', { ascending: false });
 
-  const loadEntries = async () => {
-    setLoading(true);
+    if (!error && data) {
+      // Keep entries that were written offline but not synced yet visible
+      // instead of letting the server response overwrite them.
+      const pending = (await get(PENDING_SYNC_KEY)) || [];
+      const serverIds = new Set(data.map(e => e.id));
+      setEntries([...pending.filter(e => !serverIds.has(e.id)), ...data]);
+      await cacheEntriesLocally(data);
+    }
+  }, []);
+
+  const runSync = useCallback(async () => {
+    await syncPendingDeletions();
+    await syncPendingEntries();
+    await fetchEntriesOnline();
+  }, [fetchEntriesOnline]);
+
+  const loadEntries = useCallback(async () => {
+    // `loading` starts as true and only clears here — silent refreshes on
+    // save/delete don't flash the spinner.
     const local = await getLocalEntries();
     setEntries(local);
     setLoading(false);
 
     if (!isOffline) {
-      fetchEntriesOnline();
+      await runSync();
     }
-  };
+  }, [isOffline, runSync]);
 
-  const fetchEntriesOnline = async () => {
-    const { data, error } = await supabase
-      .from('entries')
-      .select(`*, entry_attachments(*)`)
-      .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      setEntries(data);
-      await cacheEntriesLocally(data);
+  // Load entries when unlocked (and replay offline deletions when online)
+  useEffect(() => {
+    if (!session || !isUnlocked) return;
+    let cancelled = false;
+
+    getLocalEntries().then(local => {
+      if (!cancelled) {
+        setEntries(local);
+        setLoading(false);
+      }
+    });
+
+    if (!isOffline) {
+      syncPendingDeletions().then(() => {
+        if (!cancelled) runSync();
+      });
     }
-  };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, isUnlocked, isOffline, runSync]);
+
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOffline(false);
+      if (isUnlocked) {
+        await runSync();
+      }
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [isUnlocked, runSync]);
+
+  // Auth initialization
+  useEffect(() => {
+    let hasInitialSession = false;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsUnlocked(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      // A SIGNED_IN we did not initiate ourselves means the user arrived via
+      // an email confirmation link. Stay on the home page and show a banner.
+      if (event === 'INITIAL_SESSION') hasInitialSession = true;
+      if (event === 'SIGNED_IN') {
+        if (hasInitialSession && !initiatedLoginRef.current) {
+          setEmailJustConfirmed(true);
+        }
+        initiatedLoginRef.current = false;
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Remember the account locally so entries can still be written while
+  // offline with no live session.
+  useEffect(() => {
+    if (session?.user) {
+      set(USER_ID_KEY, session.user.id);
+    }
+  }, [session]);
 
   const handleUnlock = async (e) => {
     e.preventDefault();
@@ -222,71 +269,84 @@ function App() {
         setAuthError('No offline credentials found. You must log in online at least once.');
         return;
       }
-      
-      const inputHash = await hashPassword(password);
-      if (inputHash === storedHash) {
+
+      const { ok, upgrade } = await verifyPassword(password, storedHash);
+      if (ok) {
+        // Transparently upgrade old unsalted SHA-256 hashes to PBKDF2
+        if (upgrade) await set(LOCAL_HASH_KEY, await hashPassword(password));
         setIsUnlocked(true);
         setPassword('');
       } else {
         setAuthError('Incorrect password.');
       }
     } else {
-      // Online Unlock Mode
-      let error;
-      if (isLogin && session && !emailJustConfirmed) {
-        // If they already have a session and are just locked, verify against local hash
+      // Online Unlock Mode — fast path: if they already have a session and
+      // are just locked, verify against the locally stored hash.
+      if (isLogin && session) {
         const storedHash = await get(LOCAL_HASH_KEY);
         if (storedHash) {
-          const inputHash = await hashPassword(password);
-          if (inputHash === storedHash) {
+          const { ok, upgrade } = await verifyPassword(password, storedHash);
+          if (ok) {
+            if (upgrade) await set(LOCAL_HASH_KEY, await hashPassword(password));
             setIsUnlocked(true);
             setPassword('');
             return;
-          } else {
-            setAuthError('Incorrect password.');
-            return;
           }
+          // Stored hash is stale (e.g. the password was changed on another
+          // device) — fall through to full Supabase auth with the new one.
         }
       }
 
-      // If no session, no local hash, or just confirmed email → do full Supabase auth
       if (isLogin) {
-        const res = await supabase.auth.signInWithPassword({ email, password });
-        error = res.error;
-        if (!error) setEmailJustConfirmed(false); // clear confirmation banner on success
+        initiatedLoginRef.current = true;
+        const loginEmail = email || session?.user?.email;
+        if (!loginEmail) {
+          initiatedLoginRef.current = false;
+          setAuthError('Enter your email address to log in.');
+          return;
+        }
+        const res = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+        if (res.error) {
+          initiatedLoginRef.current = false;
+          setAuthError(res.error.message);
+        } else {
+          if (res.data.user) await set(USER_ID_KEY, res.data.user.id);
+          setEmailJustConfirmed(false); // clear confirmation banner on success
+          const hash = await hashPassword(password);
+          await set(LOCAL_HASH_KEY, hash);
+          setIsUnlocked(true);
+          setPassword('');
+        }
       } else {
-        const res = await supabase.auth.signUp({ 
-          email, 
+        const res = await supabase.auth.signUp({
+          email,
           password,
           options: {
             emailRedirectTo: 'https://unsent-eosin.vercel.app/'
           }
         });
-        error = res.error;
-        if (!error) {
+        if (res.error) {
+          setAuthError(res.error.message);
+        } else {
           setAuthError('Check your email for the confirmation link!');
-          return;
         }
       }
-      
-      if (error) {
-        setAuthError(error.message);
-      } else {
-        const hash = await hashPassword(password);
-        await set(LOCAL_HASH_KEY, hash);
-        setIsUnlocked(true);
-        setPassword('');
-      }
     }
-  };
-
-  const handleLock = () => {
-    setIsUnlocked(false);
   };
 
   const handleFullLogout = async () => {
     await supabase.auth.signOut();
     await set(LOCAL_HASH_KEY, null);
+    // Clear the plaintext entry cache so the diary is not readable from
+    // IndexedDB after signing out. Pending entries are kept on purpose —
+    // they were never synced, and clearing them would lose the user's words.
+    await set(CACHED_ENTRIES_KEY, []);
+    const allKeys = await keys();
+    await Promise.all(
+      allKeys
+        .filter(k => typeof k === 'string' && k.startsWith(ATTACHMENT_CACHE_PREFIX))
+        .map(k => del(k))
+    );
     setSession(null);
     setIsUnlocked(false);
   };
@@ -314,8 +374,9 @@ function App() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
+      const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
-      
+
       let textContent = "UNSENT DIARY EXPORT\n\n";
       entries.forEach(entry => {
         const date = new Date(entry.created_at).toLocaleString();
@@ -330,16 +391,20 @@ function App() {
       if (!isOffline && entries.some(e => e.entry_attachments && e.entry_attachments.length > 0)) {
         const mediaFolder = zip.folder("attachments");
         for (const entry of entries) {
-          if (entry.entry_attachments) {
+          if (entry.entry_attachments && entry.entry_attachments.length > 0) {
+            // One folder per entry so same-named files can't overwrite each other
+            const entryFolder = mediaFolder.folder(`${entry.created_at.slice(0, 10)}_${entry.id.slice(0, 8)}`);
             for (const att of entry.entry_attachments) {
-               try {
-                 const { data, error } = await supabase.storage.from('attachments').download(att.storage_path);
-                 if (data) {
-                   mediaFolder.file(att.file_name, data);
-                 }
-               } catch(err) {
-                 console.error("Failed to download attachment", att.file_name);
-               }
+              try {
+                const { data, error } = await supabase.storage.from('attachments').download(att.storage_path);
+                if (data) {
+                  entryFolder.file(att.file_name, data);
+                } else if (error) {
+                  console.warn("Failed to download attachment", att.file_name, error.message);
+                }
+              } catch (err) {
+                console.warn("Failed to download attachment", att.file_name, err);
+              }
             }
           }
         }
@@ -360,64 +425,86 @@ function App() {
     setIsExporting(false);
   };
 
+  const clearDrafts = useCallback(() => {
+    draftFiles.forEach(f => {
+      if (f.preview) URL.revokeObjectURL(f.preview);
+    });
+    setDraftFiles([]);
+  }, [draftFiles]);
+
   const saveEntry = async () => {
-    if (draftContent.trim() === '' || !session?.user) return;
-    
+    if (draftContent.trim() === '') return;
+
+    // Offline unlock can happen without a live session — fall back to the
+    // locally remembered account so writing still works.
+    const userId = session?.user?.id || await get(USER_ID_KEY);
+    if (!userId) {
+      alert("We couldn't confirm which account this diary belongs to. Please reconnect to the internet and log in once.");
+      return;
+    }
+
     const entryId = crypto.randomUUID();
     const newEntry = {
       id: entryId,
-      user_id: session.user.id,
+      user_id: userId,
       content: draftContent,
-      mood: 'Reflective',
+      mood: draftMood,
       created_at: new Date().toISOString()
     };
 
     if (isOffline) {
+      if (draftFiles.length > 0) {
+        alert("Attachments can't be uploaded while offline — this entry will be saved without them.");
+      }
       await saveEntryOffline(newEntry);
-      setDraftContent('');
-      setDraftFiles([]);
+      clearDrafts();
       setIsWriting(false);
       loadEntries();
     } else {
-      // Upload files first
+      // Insert the entry first so a failed upload can never orphan it
+      const { error } = await supabase.from('entries').insert([newEntry]);
+
+      if (error) {
+        alert("Error saving entry: " + error.message);
+        return;
+      }
+
       const uploadedAttachments = [];
-      if (draftFiles.length > 0) {
-        for (const file of draftFiles) {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Math.random()}.${fileExt}`;
-          const filePath = `${session.user.id}/${entryId}/${fileName}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('attachments')
-            .upload(filePath, file);
-            
-          if (!uploadError) {
-             uploadedAttachments.push({
-               entry_id: entryId,
-               user_id: session.user.id,
-               file_name: file.name,
-               file_type: file.type,
-               file_size: file.size,
-               storage_path: filePath
-             });
-          }
+      for (const file of draftFiles) {
+        const fileExt = file.name.includes('.') ? `.${file.name.split('.').pop()}` : '';
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const filePath = `${userId}/${entryId}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(filePath, file);
+
+        if (!uploadError) {
+          uploadedAttachments.push({
+            entry_id: entryId,
+            user_id: userId,
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+            storage_path: filePath
+          });
+        } else {
+          console.warn('Attachment upload failed:', file.name, uploadError.message);
         }
       }
 
-      // Insert entry WITH the generated ID so attachments link properly
-      const { error } = await supabase.from('entries').insert([newEntry]);
-      
-      if (!error) {
-        if (uploadedAttachments.length > 0) {
-           await supabase.from('entry_attachments').insert(uploadedAttachments);
+      if (uploadedAttachments.length > 0) {
+        const { error: attachmentError } = await supabase.from('entry_attachments').insert(uploadedAttachments);
+        if (attachmentError) {
+          // Remove files from storage so they don't linger without DB rows
+          await supabase.storage.from('attachments').remove(uploadedAttachments.map(att => att.storage_path));
+          alert("Entry saved, but its attachments could not be attached: " + attachmentError.message);
         }
-        setDraftContent('');
-        setDraftFiles([]);
-        setIsWriting(false);
-        fetchEntriesOnline();
-      } else {
-        alert("Error saving entry: " + error.message);
       }
+
+      clearDrafts();
+      setIsWriting(false);
+      fetchEntriesOnline();
     }
   };
 
@@ -427,38 +514,40 @@ function App() {
     }
 
     try {
+      const pending = await get(PENDING_SYNC_KEY) || [];
+      const cached = await get(CACHED_ENTRIES_KEY) || [];
+      const wasSynced = cached.some(e => e.id === entry.id);
+
+      // Remove from the local lists in both modes
+      await set(PENDING_SYNC_KEY, pending.filter(e => e.id !== entry.id));
+      await set(CACHED_ENTRIES_KEY, cached.filter(e => e.id !== entry.id));
+
       if (isOffline) {
-        // Offline Deletion
-        const pending = await get(PENDING_SYNC_KEY) || [];
-        const filteredPending = pending.filter(e => e.id !== entry.id);
-        await set(PENDING_SYNC_KEY, filteredPending);
-
-        const cached = await get(CACHED_ENTRIES_KEY) || [];
-        const filteredCached = cached.filter(e => e.id !== entry.id);
-        await set(CACHED_ENTRIES_KEY, filteredCached);
-
-        setSelectedEntry(null);
-        loadEntries();
+        // Queue the server-side deletion for the next connection, otherwise
+        // the entry would come back on the next sync.
+        if (wasSynced) {
+          const pendingDeletions = await get(PENDING_DELETIONS_KEY) || [];
+          if (!pendingDeletions.includes(entry.id)) {
+            pendingDeletions.push(entry.id);
+            await set(PENDING_DELETIONS_KEY, pendingDeletions);
+          }
+        }
       } else {
         // Online Deletion
         if (entry.entry_attachments && entry.entry_attachments.length > 0) {
           const filePaths = entry.entry_attachments.map(att => att.storage_path);
           await supabase.storage.from('attachments').remove(filePaths);
           for (const path of filePaths) {
-            await set(`attachment_blob_${path}`, null);
+            await del(`${ATTACHMENT_CACHE_PREFIX}${path}`);
           }
         }
 
         const { error } = await supabase.from('entries').delete().eq('id', entry.id);
         if (error) throw error;
-
-        const cached = await get(CACHED_ENTRIES_KEY) || [];
-        const filteredCached = cached.filter(e => e.id !== entry.id);
-        await set(CACHED_ENTRIES_KEY, filteredCached);
-
-        setSelectedEntry(null);
-        loadEntries();
       }
+
+      setSelectedEntry(null);
+      loadEntries();
     } catch (err) {
       alert("Failed to delete entry: " + err.message);
     }
@@ -645,7 +734,7 @@ function App() {
     return (
       <div className="app-container app-container-fullheight">
         <div className="editor-header">
-          <button className="btn-secondary editor-cancel-btn" onClick={() => { setIsWriting(false); setDraftFiles([]); if(isListening) toggleListening(); }}>
+          <button className="btn-secondary editor-cancel-btn" onClick={() => { setIsWriting(false); clearDrafts(); if(isListening) toggleListening(); }}>
             Cancel
           </button>
           <div className="editor-actions">
@@ -686,10 +775,22 @@ function App() {
                 <span className="editor-status-text">Saving locally...</span>
               </span>
             )}
-            <button className="btn-primary editor-save-btn" onClick={() => { saveEntry(); if(isListening) toggleListening(); }}>
+            <button className="btn-primary editor-save-btn" onClick={() => { saveEntry(); if(isListening) toggleListening(); }} disabled={!draftContent.trim()}>
               Save Entry
             </button>
           </div>
+        </div>
+        <div className="mood-picker" aria-label="How did you feel?">
+          {MOODS.map(mood => (
+            <button
+              key={mood}
+              type="button"
+              className={`mood-chip ${draftMood === mood ? 'active' : ''}`}
+              onClick={() => setDraftMood(mood)}
+            >
+              {mood}
+            </button>
+          ))}
         </div>
         <textarea
           className="writing-area"
@@ -846,7 +947,7 @@ function App() {
                     <Calendar size={20} /> On this day...
                   </h3>
                   {onThisDayEntries.map(entry => (
-                    <div key={entry.id} onClick={() => setSelectedEntry(entry)} style={{ cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', marginBottom: '8px' }}>
+                    <div key={entry.id} {...clickableProps(() => setSelectedEntry(entry))} style={{ cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', marginBottom: '8px' }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '8px' }}>
                         {new Date(entry.created_at).getFullYear()}
                       </div>
@@ -870,7 +971,7 @@ function App() {
                   <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Opening diary...</p>
                 ) : entries.length > 0 ? (
                   entries.map(entry => (
-                    <div key={entry.id} className="card" onClick={() => setSelectedEntry(entry)} style={{ cursor: 'pointer' }}>
+                    <div key={entry.id} className="card" {...clickableProps(() => setSelectedEntry(entry))} style={{ cursor: 'pointer' }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
                         <span>{new Date(entry.created_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                         {entry.mood && <span style={{ background: 'var(--accent-soft-lavender)', color: 'var(--bg-deep-navy)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{entry.mood}</span>}

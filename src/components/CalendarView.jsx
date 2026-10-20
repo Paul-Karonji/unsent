@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { clickableProps } from '../lib/a11y';
 
 export default function CalendarView({ entries, onSelectEntry }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -50,10 +51,10 @@ export default function CalendarView({ entries, onSelectEntry }) {
             const isDayToday = isToday(day);
             
             return (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className={`calendar-day ${!isCurrentMonth ? 'empty' : ''} ${isSelected ? 'selected' : ''} ${isDayToday ? 'today' : ''}`}
-                onClick={() => { if (isCurrentMonth) setSelectedDate(day); }}
+                {...(isCurrentMonth ? clickableProps(() => setSelectedDate(day)) : {})}
               >
                 {format(day, 'd')}
                 {dayEntries.length > 0 && <div className="entry-dot"></div>}
@@ -71,7 +72,7 @@ export default function CalendarView({ entries, onSelectEntry }) {
         {selectedEntries.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {selectedEntries.map(entry => (
-              <div key={entry.id} className="card" onClick={() => onSelectEntry(entry)} style={{ cursor: 'pointer' }}>
+              <div key={entry.id} className="card" {...clickableProps(() => onSelectEntry(entry))} style={{ cursor: 'pointer' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{format(new Date(entry.created_at), 'h:mm a')}</span>
                   {entry.mood && <span style={{ background: 'var(--accent-soft-lavender)', color: 'var(--bg-deep-navy)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{entry.mood}</span>}
