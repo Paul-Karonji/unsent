@@ -4,11 +4,11 @@
 
 **Unsent** is a beautifully designed, secure, and fully offline-capable personal diary Progressive Web App (PWA). Built for intimacy, calmness, and privacy, this application acts as a private night journal.
 
-🌐 **Live App**: [https://unsent-eosin.vercel.app](https://unsent-eosin.vercel.app)
+**Live App**: [https://unsent-eosin.vercel.app](https://unsent-eosin.vercel.app)
 
 ---
 
-## 🎨 Design Philosophy: "Soft Midnight"
+## Design Philosophy: "Soft Midnight"
 
 The UI is meticulously crafted around the **Soft Midnight** design scheme.
 - **Mood**: Private, calm, intimate, safe.
@@ -22,37 +22,40 @@ The UI is meticulously crafted around the **Soft Midnight** design scheme.
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-### 📅 Calendar View (Your Days)
+### Calendar View (Your Days)
 Navigate your diary visually through a soft monthly calendar. Days with written entries are marked with a gentle dusty rose indicator, allowing you to easily look back on past feelings.
 
-### 🔍 Memory Search
+### Memory Search
 Find specific memories, feelings, or words instantly. Search operates securely on your device, featuring Mood tags you assign while writing so you can filter your entries by how you felt that day.
 
-### 📎 Attached Memories
-Words aren't always enough. You can attach images, short videos, and files directly to your entries. Attachments are uploaded securely to your private Supabase storage bucket, displayed as soft preview cards below your writing.
+### Attached Memories
+Words aren't always enough. You can attach images, short videos, and files directly to your entries. Attachments are uploaded securely to your private Supabase storage bucket, displayed as soft preview cards below your writing. Viewed attachments are cached on your device so they can be revisited offline.
 
-### ⏳ "On This Day" (Past Memories)
+### "On This Day" (Past Memories)
 Every time you open the app, it instantly checks today's date against your entire database. If you wrote an entry on this exact calendar day in any previous year, a subtle card appears at the top of your journal, quietly surfacing nostalgic memories.
 
-### 📦 Memory Export
-You have complete ownership of your data. Generate a downloadable `.zip` file of your entire diary with a single click. Exports include a beautifully formatted chronological text file, a JSON backup, and automatic downloads of all your media attachments.
+### Mood Tags
+Pick how you felt while writing — Reflective, Grateful, Hopeful, Anxious, Sad, Angry, Joyful, or Lonely. Tags power the mood filter in Memory Search and appear as a soft badge on each entry.
 
-### 🎙️ Talk-to-Type (Voice Dictation)
+### Memory Export
+You have complete ownership of your data. Generate a downloadable `.zip` file of your entire diary with a single click. Exports include a formatted chronological text file, a JSON backup, and automatic downloads of all your media attachments (organized into one folder per entry).
+
+### Talk-to-Type (Voice Dictation)
 Sometimes it is easier to speak your thoughts. Unsent natively integrates the Web Speech API, allowing you to seamlessly dictate your diary entries in real-time. Simply click the microphone icon and speak out loud.
 
-### 🔑 Change Password
+### Change Password
 You can change your account password at any time from the Settings panel. When updated, the app automatically re-hashes and stores the new password locally so that offline unlock continues to work seamlessly with your new credentials.
 
-### ⚡ Offline First & Background Sync
+### Offline First & Background Sync
 You don't need internet to use your diary.
 - **Read & Write Offline**: Using `IndexedDB` caching, you can open the app, search, and write entries while in airplane mode or entirely offline.
-- **Silent Sync**: As soon as your device reconnects to the internet, Unsent silently uploads any pending diary entries to the secure database in the background. *(Note: File attachments currently require an active internet connection).*
+- **Silent Sync**: As soon as your device reconnects to the internet, Unsent silently uploads any pending diary entries and replays any deletions made while offline. *(Note: File attachments currently require an active internet connection).*
 
 ---
 
-## 🔒 Security, Local Lock, & Multi-Tenancy
+## Security, Local Lock, & Multi-Tenancy
 
 Privacy is the core feature of Unsent.
 
@@ -61,8 +64,9 @@ The database is built on PostgreSQL with **Row Level Security (RLS)** strictly e
 
 ### The Local Lock
 To maintain absolute privacy while supporting offline capabilities, Unsent uses a **Local Lock** mechanism:
-- When you log in online, the app cryptographically hashes your password and saves it locally.
+- When you log in online, the app derives a salted **PBKDF2** hash (600,000 iterations) of your password and saves it locally.
 - If you open the app without internet, you are prompted to unlock the diary using that exact same password.
+- If the password was changed on another device, entering the new password falls back to a full server sign-in and refreshes the stored hash automatically.
 - This guarantees your diary remains locked to prying eyes without requiring a connection to the server to verify your identity.
 
 ### Customizable Auto-Lock
@@ -70,11 +74,11 @@ Never worry about leaving your diary open accidentally. Unsent features an idle 
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 - **Frontend**: React + Vite + VitePWA
 - **Date Math**: `date-fns` for robust calendar generation
-- **Utilities**: `react-idle-timer` for security, `jszip` for data exports
+- **Utilities**: `react-idle-timer` for security, `jszip` (lazy-loaded) for data exports
 - **Caching**: `idb-keyval` (IndexedDB)
 - **Styling**: Vanilla CSS (Strict adherence to the Soft Midnight design tokens)
 - **Backend & Auth**: Supabase (PostgreSQL + GoTrue Auth + Supabase Storage)
@@ -82,7 +86,7 @@ Never worry about leaving your diary open accidentally. Unsent features an idle 
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Prerequisites
 - Node.js (v18+)
@@ -104,11 +108,11 @@ DATABASE_URL="postgresql://postgres.your-project:your-password@aws-0-eu-central-
 ```
 
 ### 4. Database Setup
-A `setup_db.js` file is included in the project root to automate the database initialization. It will read the `DATABASE_URL` from your `.env.local` file. Run:
+A `setup_db.js` file is included in the project root to automate the database initialization. It reads the `DATABASE_URL` from your `.env.local` file automatically. Run:
 ```bash
-node --env-file=.env.local setup_db.js
+node setup_db.js
 ```
-*This script automatically creates the `entries` and `entry_attachments` tables, sets up the private Storage Bucket, and applies all necessary RLS privacy policies.*
+*This script automatically creates the `entries` and `entry_attachments` tables, sets up the private Storage Bucket, applies all necessary RLS privacy policies, and adds performance indexes and an `updated_at` trigger.*
 
 ### 5. Running the App
 Start the Vite development server:
